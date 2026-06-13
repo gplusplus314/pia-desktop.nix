@@ -1,0 +1,24 @@
+diff --git a/rake/product/desktop.rb b/rake/product/desktop.rb
+index 4a10d2e4..fe20781f 100644
+--- a/rake/product/desktop.rb
++++ b/rake/product/desktop.rb
+@@ -124,7 +124,9 @@ module PiaDesktop
+                 .framework('CoreWLAN')
+                 .framework('SystemConfiguration')
+         elsif(Build.linux?)
+-            daemon.include('/usr/include/libnl3')
++            # libnl3 headers live in /usr/include/libnl3 on most distributions,
++            # but can be elsewhere (e.g. the Nix store); allow an override.
++            daemon.include(ENV['LIBNL3_INCLUDE'].to_s.empty? ? '/usr/include/libnl3' : ENV['LIBNL3_INCLUDE'])
+         end
+ 
+         # Install LICENSE.txt
+@@ -155,7 +157,7 @@ module PiaDesktop
+                                 jsonFetched.componentDir] do |t|
+                 if(serverDataDir)
+                     # Use the copy provided instead of fetching (for reproducing a build)
+-                    File.copy(File.join(serverDataDir, k), fetchedFile)
++                    FileUtils.copy(File.join(serverDataDir, k.to_s), fetchedFile)
+                 else
+                     # Fetch from the web API (write with "binary" mode so LF is not
+                     # converted to CRLF on Windows)

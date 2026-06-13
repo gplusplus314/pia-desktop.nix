@@ -1,0 +1,17 @@
+diff --git a/rake/toolchain/clang.rb b/rake/toolchain/clang.rb
+index 808e1251..6814de3b 100644
+--- a/rake/toolchain/clang.rb
++++ b/rake/toolchain/clang.rb
+@@ -300,6 +300,12 @@ class ClangToolchain
+             '-Wno-dangling-else',
+             '-Werror=unused-result',
+             '-Werror=return-type',
++            # Building against a much newer Qt than upstream targets (6.10 vs
++            # 6.2): newer Qt marks many methods [[nodiscard]] and tightens
++            # signatures, which would turn these into hard errors.  Demote them
++            # back to warnings so the newer Qt headers compile.
++            '-Wno-error=unused-result',
++            '-Wno-error=return-type',
+             '-fPIC',
+             '-MMD', # Write dependency file for user headers only
+             '-MF', depFile # Specify dependency file

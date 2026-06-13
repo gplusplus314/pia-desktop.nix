@@ -1,0 +1,19 @@
+diff --git a/rake/toolchain/clangplatform/linux.rb b/rake/toolchain/clangplatform/linux.rb
+index 7ece4b83..112138ff 100644
+--- a/rake/toolchain/clangplatform/linux.rb
++++ b/rake/toolchain/clangplatform/linux.rb
+@@ -31,9 +31,12 @@ class ClangLinux
+         @ar = File.join(toolchainPath, 'llvm-ar')
+         # On most distributions, clang packages only include clang,
+         # make sure LLVM is installed too.
++        #
++        # On some systems (e.g. NixOS) the clang and llvm packages live in
++        # separate, read-only locations, so llvm-ar is not next to clang.  Fall
++        # back to a bare 'llvm-ar' resolved via PATH in that case.
+         if(!File.exist?(@ar))
+-            raise "Found clang installed at #{toolchainPath}, but did not find LLVM tools.\n" +
+-                "Install an LLVM package, usually 'llvm' or 'llvm-<version>'"
++            @ar = 'llvm-ar'
+         end
+     end
+ 

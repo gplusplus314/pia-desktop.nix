@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# Bump this flake to the newest upstream PIA Desktop release tag and refresh the
+# source hash in nix/package.nix.
+#
+#   scripts/update            update to the newest tag (edits nix/package.nix)
+#   scripts/update --check    report whether a newer tag exists; change nothing
+#
+# How it works: query upstream tags, pick the highest MAJOR.MINOR.PATCH, and if
+# it's newer than the pinned `version`, rewrite `version`, set the hash to the
+# fake all-zeroes hash, build `.#pia-desktop.src` to learn the real hash from the
+# resulting mismatch, then write that hash back.
+set -euo pipefail
+
+REPO="https://github.com/pia-foss/desktop.git"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PKG="$ROOT/nix/package.nix"
+FAKE_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+check_only=0
+[[ "${1:-}" == "--check" ]] && check_only=1
+
+die() { echo "error: $*" >&2; exit 1; }
+
+command -v nix >/dev/null || die "nix not found on PATH"
+[[ -f "$PKG" ]] || die "cannot find $PKG"
+
+current="$(sed -n 's/^[[:space:]]*version = "\([^"]*\)";.*/\1/p' "$PKG" | head -1)"
+[[ -n "$current" ]] || die "could not read current version from $PKG"
+
+# Highest semver-looking tag upstream (strip the ^{} dereference entries).
+latest="$(
+  git ls-remote --tags "$REPO" \
+    | sed -n 's/.*refs\/tags\/\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+    | sort -V | tail -1
+)"
+[[ -n "$latest" ]] || die "could not list upstream tags from $REPO"
+
+echo "current pinned version: $current"
+echo "newest upstream tag:    $latest"
+
+# Is $latest strictly newer than $current?
+newest="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)"
+if [[ "$latest" == "$current" || "$newest" != "$latest" ]]; then
+  echo "Already up to date."
+  exit 0
+fi
+
+if [[ "$check_only" -eq 1 ]]; then
+  echo "A newer release is available: $current -> $latest"
+  echo "Run 'scripts/update' to apply it."
+  exit 0
+fi
+
+echo "Updating $current -> $latest ..."
+
+# Bump version and reset the hash to the fake value so the next fetch reports the
+# real one. Match the specific assignment lines, not incidental occurrences.
+sed -i \
+  -e "s/^\([[:space:]]*\)version = \"[^\"]*\";/\1version = \"$latest\";/" \
+  -e "s/^\([[:space:]]*\)hash = \"sha256-[^\"]*\";/\1hash = \"$FAKE_HASH\";/" \
+  "$PKG"
+
+echo "Fetching source to compute hash (LFS clone, may take a while) ..."
+build_log="$(nix build "$ROOT#pia-desktop.src" --no-link 2>&1 || true)"
+
+new_hash="$(printf '%s\n' "$build_log" | sed -n 's/.*got:[[:space:]]*\(sha256-[A-Za-z0-9+/=]*\).*/\1/p' | head -1)"
+
+if [[ -z "$new_hash" ]]; then
+  if printf '%s\n' "$build_log" | grep -q "$FAKE_HASH"; then
+    : # mismatch expected but we failed to parse it
+  fi
+  echo "$build_log" >&2
+  die "could not determine the new source hash (see build output above)"
+fi
+
+sed -i -e "s/^\([[:space:]]*\)hash = \"sha256-[^\"]*\";/\1hash = \"$new_hash\";/" "$PKG"
+
+echo
+echo "Updated nix/package.nix:"
+echo "  version -> $latest"
+echo "  hash    -> $new_hash"
+echo
+echo "Next steps:"
+echo "  nix build .#pia-desktop   # confirm patches still apply and it builds"
+echo "  nix flake check           # re-run the NixOS VM test"
+echo "  (if a patch failed, regenerate it in nix/patches/ against tag $latest)"

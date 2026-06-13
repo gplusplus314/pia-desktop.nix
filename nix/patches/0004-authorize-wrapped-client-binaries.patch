@@ -1,0 +1,14 @@
+diff --git a/common/src/ipc.cpp b/common/src/ipc.cpp
+--- a/common/src/ipc.cpp
++++ b/common/src/ipc.cpp
+@@ -265,7 +265,9 @@
+     #endif
+
+     const QStringList authorizedBinaries = {Path::ClientExecutable,
+-                                            Path::CliExecutable};
++                                            Path::CliExecutable,
++                                            Path::ExecutableDir / ".pia-client-unwrapped",
++                                            Path::ExecutableDir / ".pia-support-tool-unwrapped"};
+     qint64 pid = getClientPid(clientSocket);
+     if(pid < 0)
+     {

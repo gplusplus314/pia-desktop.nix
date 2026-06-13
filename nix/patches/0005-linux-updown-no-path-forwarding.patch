@@ -1,0 +1,32 @@
+diff --git a/daemon/src/openvpnmethod.cpp b/daemon/src/openvpnmethod.cpp
+index 9429ffd..1a64142 100644
+--- a/daemon/src/openvpnmethod.cpp
++++ b/daemon/src/openvpnmethod.cpp
+@@ -229,22 +229,11 @@ void OpenVPNMethod::run(const ConnectionConfig &connectingConfig,
+         updownCmd += QStringLiteral(" /C call ");
+ #endif
+         updownCmd += escapeArg(Path::OpenVPNUpDownScript);
+-#if defined(Q_OS_LINUX)
+-        // OpenVPN invokes our up/down script without PATH (the environment is
+-        // empty other than the values OpenVPN specifically adds).  Add PATH
+-        // back in to ensure we can find `ip` if it's somewhere like /usr/sbin
+-        // (Fedora 33).  We can't apply environment variables with OpenVPN's
+-        // interface, so the script accepts --path <PATH> on the command line.
+-        // We also have to break it into <256 char chunks in order to work
+-        // around OpenVPN's arg limits.
+-        QString actualPath{QString::fromLocal8Bit(qgetenv("PATH"))};
+-        enum : int { PathChunk=120 };   // Allows headroom even in extreme cases of quoting
+-        for(int i=0; i<actualPath.size(); i += PathChunk)
+-        {
+-            updownCmd += QStringLiteral(" --path ");
+-            updownCmd += escapeArg(actualPath.mid(i, PathChunk));
+-        }
+-#endif
++        // On Linux the up/down script sets its own PATH, so we don't forward
++        // one here.  Forwarding a long PATH via repeated --path args (the value
++        // is split into <256 char chunks for OpenVPN's per-arg limit) produced
++        // so many tokens that OpenVPN truncated the up/down command line and
++        // dropped the trailing "--dns"/"--" args, breaking the script.
+ 
+ #ifdef Q_OS_WIN
+         // Only the Windows updown script supports logging right now.  Enable it
